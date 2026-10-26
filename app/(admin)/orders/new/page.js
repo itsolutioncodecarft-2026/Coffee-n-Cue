@@ -110,6 +110,7 @@ export default function NewOrderPage() {
   async function handleSubmit(e) {
     e.preventDefault()
     if (cart.length === 0) { toast('Add at least one item', 'error'); return }
+    if (!form.customerName.trim()) { toast('Customer name is required', 'error'); return }
     setSubmitting(true)
     try {
       const res = await orders.create({
@@ -253,8 +254,9 @@ export default function NewOrderPage() {
                 {/* Customer info */}
                 <div>
                   <input
+                    required
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="Customer name (optional — for credit/khata)"
+                    placeholder="Customer name *"
                     value={form.customerName}
                     onChange={(e) => setForm({ ...form, customerName: e.target.value })}
                   />
