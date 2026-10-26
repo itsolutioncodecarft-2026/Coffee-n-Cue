@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingBag, PlusCircle, UtensilsCrossed,
   Tag, BarChart2, Settings, LogOut, Coffee, Menu, X,
-  Receipt, FolderOpen
+  Receipt, Users
 } from 'lucide-react'
 import { useState } from 'react'
 import { auth } from '@/lib/api'
@@ -17,6 +17,7 @@ const NAV = [
   { href: '/menu', label: 'Menu Items', icon: UtensilsCrossed },
   { href: '/categories', label: 'Categories', icon: Tag },
   { href: '/expenses', label: 'Expenses', icon: Receipt },
+  { href: '/customers', label: 'Customers', icon: Users },
   { href: '/reports', label: 'Reports', icon: BarChart2 },
   { href: '/settings', label: 'Settings', icon: Settings },
 ]

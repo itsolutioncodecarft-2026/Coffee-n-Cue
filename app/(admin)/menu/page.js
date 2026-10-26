@@ -12,7 +12,7 @@ import { useToast } from '@/components/ui/Toast'
 
 function fmt(n) { return `₹${Number(n || 0).toFixed(2)}` }
 
-const EMPTY_FORM = { name: '', category: '', price: '', costPrice: '', isAvailable: true }
+const EMPTY_FORM = { name: '', category: '', price: '', costPrice: '', customPrice: false, isAvailable: true }
 
 export default function MenuPage() {
   const toast = useToast()
@@ -61,7 +61,7 @@ export default function MenuPage() {
   function openAdd() { setForm(EMPTY_FORM); setFormError(''); setModal('add') }
   function openEdit(item) {
     setEditItem(item)
-    setForm({ name: item.name, category: item.category?._id || '', price: item.price, costPrice: item.costPrice ?? '', isAvailable: item.isAvailable })
+    setForm({ name: item.name, category: item.category?._id || '', price: item.price, costPrice: item.costPrice ?? '', customPrice: item.customPrice || false, isAvailable: item.isAvailable })
     setFormError('')
     setModal('edit')
   }
@@ -76,6 +76,7 @@ export default function MenuPage() {
       const payload = { name: form.name, category: form.category, price: parseFloat(form.price), isAvailable: form.isAvailable }
       if (form.costPrice !== '' && form.costPrice !== null) payload.costPrice = parseFloat(form.costPrice)
       else payload.costPrice = null
+      payload.customPrice = form.customPrice || false
       if (modal === 'add') await menu.create(payload)
       else await menu.update(editItem._id, payload)
       toast(modal === 'add' ? 'Item added' : 'Item updated', 'success')
@@ -149,10 +150,15 @@ export default function MenuPage() {
                       <div className="flex items-center gap-2">
                         <p className={`text-sm font-medium ${item.isAvailable ? 'text-gray-900' : 'text-gray-400 line-through'}`}>{item.name}</p>
                         {!item.isAvailable && <Badge variant="error">Unavailable</Badge>}
+                        {item.customPrice && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">Custom ₹</span>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-emerald-700">{fmt(item.price)}</p>
+                      <p className="text-sm font-bold text-emerald-700">
+                        {item.customPrice ? <span className="text-purple-600">Custom</span> : fmt(item.price)}
+                      </p>
                       {item.costPrice != null && (
                         <p className="text-xs text-gray-400">cost {fmt(item.costPrice)}</p>
                       )}
@@ -214,6 +220,14 @@ export default function MenuPage() {
             <input type="checkbox" className="w-4 h-4 accent-emerald-700"
               checked={form.isAvailable} onChange={(e) => setForm({ ...form, isAvailable: e.target.checked })} />
             <span className="text-sm text-gray-700">Available for ordering</span>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer p-3 border border-purple-100 rounded-lg bg-purple-50">
+            <input type="checkbox" className="w-4 h-4 accent-purple-600 mt-0.5"
+              checked={form.customPrice || false} onChange={(e) => setForm({ ...form, customPrice: e.target.checked })} />
+            <div>
+              <span className="text-sm text-gray-700 font-medium">Custom Price (e.g. Snooker Tables)</span>
+              <p className="text-xs text-gray-400 mt-0.5">Staff will enter the actual price at order time. Use for items where price varies (e.g. table time charges).</p>
+            </div>
           </label>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setModal(null)}>Cancel</Button>

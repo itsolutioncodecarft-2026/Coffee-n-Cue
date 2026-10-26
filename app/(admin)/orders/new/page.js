@@ -1,10 +1,11 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle } from 'lucide-react'
+import { Search, Plus, Minus, Trash2, ShoppingBag, CheckCircle, X } from 'lucide-react'
 import { menu, categories, orders } from '@/lib/api'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Button from '@/components/ui/Button'
+import Modal from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 
 function fmt(n) {
@@ -24,6 +25,10 @@ export default function NewOrderPage() {
   const [submitting, setSubmitting] = useState(false)
   const [loadingMenu, setLoadingMenu] = useState(true)
   const [successOrder, setSuccessOrder] = useState(null)
+
+  // Custom price modal (for snooker tables)
+  const [customPriceItem, setCustomPriceItem] = useState(null)
+  const [customAmount, setCustomAmount] = useState('')
 
   useEffect(() => {
     async function loadMenu() {
@@ -50,13 +55,42 @@ export default function NewOrderPage() {
   })
 
   function addToCart(item) {
+    // If custom price item (snooker), open the price modal
+    if (item.customPrice) {
+      setCustomPriceItem(item)
+      setCustomAmount('')
+      return
+    }
+
+    // Normal item — add directly
     setCart((prev) => {
       const existing = prev.find((c) => c._id === item._id)
       if (existing) {
         return prev.map((c) => c._id === item._id ? { ...c, quantity: c.quantity + 1 } : c)
       }
-      return [...prev, { _id: item._id, name: item.name, price: item.price, quantity: 1 }]
+      return [...prev, { _id: item._id, name: item.name, price: item.price, quantity: 1, customPrice: false }]
     })
+  }
+
+  function addCustomItem() {
+    const amount = parseFloat(customAmount)
+    if (!amount || amount <= 0) {
+      toast('Enter a valid amount', 'error')
+      return
+    }
+    // Each custom item is a separate cart entry (unique key)
+    const cartEntry = {
+      _id: customPriceItem._id,
+      name: customPriceItem.name,
+      price: amount,        // custom amount as the unit price
+      quantity: 1,
+      customPrice: true,
+      customAmount: amount,
+    }
+    setCart((prev) => [...prev, cartEntry])
+    setCustomPriceItem(null)
+    setCustomAmount('')
+    toast(`${customPriceItem.name} added at ${fmt(amount)}`, 'success')
   }
 
   function updateQty(id, delta) {
@@ -67,8 +101,8 @@ export default function NewOrderPage() {
     )
   }
 
-  function removeFromCart(id) {
-    setCart((prev) => prev.filter((c) => c._id !== id))
+  function removeFromCart(idx) {
+    setCart((prev) => prev.filter((_, i) => i !== idx))
   }
 
   const cartTotal = cart.reduce((s, c) => s + c.price * c.quantity, 0)
@@ -83,7 +117,11 @@ export default function NewOrderPage() {
         tableNumber: form.tableNumber,
         orderType: form.orderType,
         notes: form.notes,
-        items: cart.map((c) => ({ menuItemId: c._id, quantity: c.quantity })),
+        items: cart.map((c) => ({
+          menuItemId: c._id,
+          quantity: c.quantity,
+          customAmount: c.customPrice ? c.customAmount : undefined,
+        })),
       })
       setSuccessOrder(res.data)
       setCart([])
@@ -161,7 +199,7 @@ export default function NewOrderPage() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {filtered.map((item) => {
-                const inCart = cart.find((c) => c._id === item._id)
+                const inCart = cart.filter((c) => c._id === item._id && !c.customPrice).length
                 return (
                   <button
                     key={item._id}
@@ -171,14 +209,18 @@ export default function NewOrderPage() {
                   >
                     <div className="flex items-start justify-between gap-1 mb-1">
                       <p className="text-sm font-medium text-gray-800 leading-tight">{item.name}</p>
-                      {inCart && (
+                      {inCart > 0 && (
                         <span className="flex-shrink-0 w-5 h-5 bg-emerald-600 text-white text-xs rounded-full flex items-center justify-center font-bold">
-                          {inCart.quantity}
+                          {inCart}
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-gray-400 mb-2">{item.category?.name}</p>
-                    <p className="text-sm font-bold text-emerald-700">{fmt(item.price)}</p>
+                    {item.customPrice ? (
+                      <p className="text-sm font-bold text-purple-700">Custom ₹</p>
+                    ) : (
+                      <p className="text-sm font-bold text-emerald-700">{fmt(item.price)}</p>
+                    )}
                   </button>
                 )
               })}
@@ -201,7 +243,7 @@ export default function NewOrderPage() {
                   <span className="font-semibold text-sm">Order Summary</span>
                   {cart.length > 0 && (
                     <span className="ml-auto bg-amber-400 text-emerald-900 text-xs rounded-full px-2 py-0.5 font-bold">
-                      {cart.reduce((s, c) => s + c.quantity, 0)} items
+                      {cart.length} items
                     </span>
                   )}
                 </div>
@@ -212,7 +254,7 @@ export default function NewOrderPage() {
                 <div>
                   <input
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                    placeholder="Customer name (optional)"
+                    placeholder="Customer name (optional — for credit/khata)"
                     value={form.customerName}
                     onChange={(e) => setForm({ ...form, customerName: e.target.value })}
                   />
@@ -244,27 +286,32 @@ export default function NewOrderPage() {
                   {cart.length === 0 && (
                     <p className="text-xs text-gray-400 text-center py-4">Click items to add them</p>
                   )}
-                  {cart.map((item) => (
-                    <div key={item._id} className="flex items-center gap-2">
+                  {cart.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-800 truncate">{item.name}</p>
-                        <p className="text-xs text-gray-400">{fmt(item.price)} × {item.quantity} = {fmt(item.price * item.quantity)}</p>
+                        <p className="text-xs text-gray-400">
+                          {fmt(item.price)} {item.quantity > 1 ? `× ${item.quantity}` : ''} = {fmt(item.price * item.quantity)}
+                          {item.customPrice && <span className="ml-1 text-purple-500">(custom)</span>}
+                        </p>
                       </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button type="button" onClick={() => updateQty(item._id, -1)}
-                          className="w-6 h-6 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100">
-                          <Minus size={10} />
-                        </button>
-                        <span className="text-xs font-bold w-5 text-center">{item.quantity}</span>
-                        <button type="button" onClick={() => updateQty(item._id, 1)}
-                          className="w-6 h-6 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100">
-                          <Plus size={10} />
-                        </button>
-                        <button type="button" onClick={() => removeFromCart(item._id)}
-                          className="w-6 h-6 rounded border border-red-100 text-red-400 flex items-center justify-center hover:bg-red-50 ml-1">
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
+                      {!item.customPrice && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button type="button" onClick={() => updateQty(item._id, -1)}
+                            className="w-6 h-6 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100">
+                            <Minus size={10} />
+                          </button>
+                          <span className="text-xs font-bold w-5 text-center">{item.quantity}</span>
+                          <button type="button" onClick={() => updateQty(item._id, 1)}
+                            className="w-6 h-6 rounded border border-gray-200 flex items-center justify-center hover:bg-gray-100">
+                            <Plus size={10} />
+                          </button>
+                        </div>
+                      )}
+                      <button type="button" onClick={() => removeFromCart(idx)}
+                        className="w-6 h-6 rounded border border-red-100 text-red-400 flex items-center justify-center hover:bg-red-50 ml-1">
+                        <Trash2 size={10} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -299,6 +346,41 @@ export default function NewOrderPage() {
           </form>
         </div>
       </div>
+
+      {/* Custom Price Modal (for snooker tables) */}
+      <Modal open={!!customPriceItem} onClose={() => setCustomPriceItem(null)} title="Enter Amount" size="sm">
+        {customPriceItem && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">{customPriceItem.name}</p>
+              <p className="text-xs text-gray-400">{customPriceItem.category?.name} — price based on time played</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount (₹) *</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold text-sm pointer-events-none">₹</span>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  autoFocus
+                  className="w-full pl-7 pr-3 py-2.5 border border-gray-200 rounded-lg text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="0"
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); addCustomItem() }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setCustomPriceItem(null)}>Cancel</Button>
+              <Button className="flex-1" onClick={addCustomItem}>Add to Order</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
