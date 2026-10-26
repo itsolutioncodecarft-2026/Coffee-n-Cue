@@ -5,6 +5,17 @@ import { Coffee, Eye, EyeOff } from 'lucide-react'
 import { auth } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 
+// Set a readable cookie so proxy.js can detect login state
+// (HTTP-only cnc_auth from backend is unreadable by JS/proxy on cross-domain)
+function setPresenceCookie() {
+  const maxAge = 7 * 24 * 60 * 60 // 7 days in seconds
+  document.cookie = `cnc_auth_present=1; path=/; max-age=${maxAge}; SameSite=Lax`
+}
+
+function clearPresenceCookie() {
+  document.cookie = 'cnc_auth_present=; path=/; max-age=0; SameSite=Lax'
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const toast = useToast()
@@ -23,10 +34,14 @@ export default function LoginPage() {
     setLoading(true)
     try {
       await auth.login(form.email, form.password)
+      // Set presence cookie so proxy.js knows user is authenticated
+      setPresenceCookie()
       toast('Login successful', 'success')
-      router.push('/dashboard')
+      // Use window.location for hard navigation so proxy picks up the new cookie
+      window.location.href = '/dashboard'
     } catch (err) {
       setError(err.message || 'Login failed')
+      clearPresenceCookie()
     } finally {
       setLoading(false)
     }
@@ -35,9 +50,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-emerald-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-8">
-          {/* Logo */}
           <div className="flex flex-col items-center mb-8">
             <div className="w-16 h-16 bg-emerald-800 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
               <Coffee size={32} className="text-amber-400" />

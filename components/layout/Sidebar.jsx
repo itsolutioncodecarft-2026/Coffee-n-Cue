@@ -30,7 +30,9 @@ export default function Sidebar() {
   async function handleLogout() {
     setLoggingOut(true)
     try { await auth.logout() } catch {}
-    router.push('/login')
+    // Clear presence cookie
+    document.cookie = 'cnc_auth_present=; path=/; max-age=0; SameSite=Lax'
+    window.location.href = '/login'
   }
 
   const navContent = (
