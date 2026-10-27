@@ -176,10 +176,18 @@ export default function OrderDetailPage({ params }) {
     e.preventDefault(); setPayError('')
     const amount = parseFloat(payForm.amount)
     if (!amount || amount <= 0) { setPayError('Enter a valid amount'); return }
+    // For credit, don't validate against outstanding (it just notes the credit)
+    if (payForm.method !== 'credit' && amount > order.outstandingAmount + 0.01) {
+      setPayError(`Amount exceeds outstanding balance of ₹${order.outstandingAmount.toFixed(2)}`)
+      return
+    }
     setPaySubmitting(true)
     try {
       await payments.record(id, { amount, method: payForm.method, transactionRef: payForm.transactionRef, notes: payForm.notes })
-      toast(`₹${amount} recorded (${payForm.method.toUpperCase()})`, 'success')
+      const msg = payForm.method === 'credit'
+        ? `₹${amount} noted as credit (khata)`
+        : `₹${amount} recorded (${payForm.method.toUpperCase()})`
+      toast(msg, 'success')
       setPayModal(false); load()
     } catch (err) { setPayError(err.message) }
     finally { setPaySubmitting(false) }
@@ -288,15 +296,35 @@ export default function OrderDetailPage({ params }) {
             ) : (
               <div className="space-y-2">
                 {orderPayments.map(p => (
-                  <div key={p._id} className={`flex items-center justify-between p-3 rounded-lg border ${p.isRefund ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
+                  <div key={p._id} className={`flex items-center justify-between p-3 rounded-lg border ${
+                    p.isRefund ? 'bg-red-50 border-red-100' :
+                    p.method === 'credit' ? 'bg-amber-50 border-amber-100' :
+                    'bg-green-50 border-green-100'
+                  }`}>
                     <div className="flex items-center gap-3">
-                      {p.method === 'cash' ? <Banknote size={16} className={p.isRefund ? 'text-red-500' : 'text-green-600'} /> : <CreditCard size={16} className={p.isRefund ? 'text-red-500' : 'text-blue-600'} />}
+                      {p.method === 'cash' ? <Banknote size={16} className="text-green-600" /> :
+                       p.method === 'upi' ? <CreditCard size={16} className="text-blue-600" /> :
+                       p.method === 'credit' ? <Clock size={16} className="text-amber-600" /> :
+                       <Banknote size={16} className="text-gray-400" />}
                       <div>
-                        <p className="text-sm font-medium text-gray-800">{p.isRefund ? 'Refund — ' : ''}{p.method.toUpperCase()}{p.transactionRef && <span className="text-gray-400 ml-2 text-xs">#{p.transactionRef}</span>}</p>
+                        <p className="text-sm font-medium text-gray-800">
+                          {p.isRefund ? 'Refund — ' : ''}
+                          {p.method === 'credit' ? 'Credit (Khata)' : p.method.toUpperCase()}
+                          {p.transactionRef && <span className="text-gray-400 ml-2 text-xs">#{p.transactionRef}</span>}
+                        </p>
                         <p className="text-xs text-gray-400">{istDate(p.paidAt)}</p>
                       </div>
                     </div>
-                    <p className={`font-bold text-sm ${p.isRefund ? 'text-red-600' : 'text-green-700'}`}>{p.isRefund ? '−' : '+'}{fmt(p.amount)}</p>
+                    <div className="text-right">
+                      <p className={`font-bold text-sm ${
+                        p.isRefund ? 'text-red-600' :
+                        p.method === 'credit' ? 'text-amber-600' :
+                        'text-green-700'
+                      }`}>
+                        {p.isRefund ? '−' : p.method === 'credit' ? '' : '+'}{fmt(p.amount)}
+                      </p>
+                      {p.method === 'credit' && <p className="text-xs text-amber-500">not collected</p>}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -480,14 +508,32 @@ export default function OrderDetailPage({ params }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method *</label>
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-              {['cash', 'upi'].map(m => (
-                <button key={m} type="button" onClick={() => setPayForm({ ...payForm, method: m })}
-                  className={`flex-1 py-2.5 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${payForm.method === m ? 'bg-emerald-700 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-                  {m === 'cash' ? <Banknote size={16} /> : <CreditCard size={16} />} {m.toUpperCase()}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { val: 'cash', icon: Banknote, label: 'Cash' },
+                { val: 'upi', icon: CreditCard, label: 'UPI' },
+                { val: 'credit', icon: Clock, label: 'Credit' },
+              ].map(({ val, icon: Icon, label }) => (
+                <button key={val} type="button"
+                  onClick={() => setPayForm({ ...payForm, method: val })}
+                  className={`flex flex-col items-center py-2.5 rounded-xl border-2 text-xs font-medium transition-all
+                    ${payForm.method === val
+                      ? val === 'credit'
+                        ? 'border-amber-500 bg-amber-50 text-amber-700'
+                        : 'border-emerald-600 bg-emerald-50 text-emerald-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                >
+                  <Icon size={16} className="mb-1" />
+                  {label}
                 </button>
               ))}
             </div>
+            {payForm.method === 'credit' && (
+              <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                ⚠️ Credit — No money collected now. Amount stays outstanding and is added to customer's khata.
+              </div>
+            )}
           </div>
           {payForm.method === 'upi' && (
             <div>
