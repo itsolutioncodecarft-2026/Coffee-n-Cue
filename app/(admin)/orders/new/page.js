@@ -160,11 +160,11 @@ export default function NewOrderPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto h-full">
       <h2 className="text-lg font-semibold text-gray-800 mb-5">Create New Order</h2>
-      <div className="flex flex-col xl:flex-row gap-5">
+      <div className="flex flex-col xl:flex-row gap-5 items-start">
 
-        {/* Menu panel */}
+        {/* Menu panel — scrollable */}
         <div className="flex-1 min-w-0">
           {/* Search + category filter */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4 space-y-3">
@@ -234,10 +234,10 @@ export default function NewOrderPage() {
           )}
         </div>
 
-        {/* Order summary panel */}
-        <div className="xl:w-80 flex-shrink-0">
+        {/* Order summary panel — sticky while menu scrolls */}
+        <div className="xl:w-80 flex-shrink-0 sticky top-6 self-start max-h-[calc(100vh-6rem)] overflow-y-auto">
           <form onSubmit={handleSubmit}>
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden sticky top-6">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-4 py-3 bg-emerald-800 text-white">
                 <div className="flex items-center gap-2">
                   <ShoppingBag size={16} />
